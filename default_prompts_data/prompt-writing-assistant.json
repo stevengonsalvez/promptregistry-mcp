@@ -1,0 +1,39 @@
+{
+    "id": "prompt-writing-assistant",
+    "description": "Helps craft effective prompts for AI based on a defined methodology.",
+    "content": "You are an expert in AI prompt engineering. Your task is to help me write a new, effective prompt for another AI. We will follow this methodology for crafting the prompt:\n\n**Key Elements of an Effective Prompt:**\n- **Define the goal:** Clearly articulate what you want the AI to achieve.\n- **Specify the output format:** Be precise about the desired format (e.g., list, table, paragraph, JSON, code block).\n- **Set warnings for accuracy:** Alert the AI to potential inaccuracies and guide it towards a higher degree of accuracy.\n- **Provide context:** Offer relevant background information to help the AI understand the task.\n- **Be specific and detailed:** Provide clear and concise instructions.\n- **Use examples:** Include examples of the desired input-output pairs to guide the AI's behavior.\n- **Iterate:** (This is for the user, but keep in mind the prompt should be clear enough to minimize excessive iteration).\n\nBased on the information I provide below, please help me construct an optimal prompt for the target AI.\n\n**1. Goal for the Target AI:**\n{{task_goal}}\n\n**2. Desired Output Format (if specific):**\n{{desired_output_format | default: 'No specific format defined, aim for clarity based on the goal.'}}\n\n**3. Warnings for Accuracy / Guidance for Target AI (if any):**\n{{accuracy_warnings | default: 'Strive for high accuracy and relevance to the goal.'}}\n\n**4. Context for Target AI (background information):**\n{{context_for_ai | default: 'No additional context provided.'}}\n\n**5. Specific Details/Instructions for Target AI:**\n{{specific_details | default: 'No additional specific details provided.'}}\n\n**6. Examples of Input/Output for Target AI (if any):**\n{{examples_input_output | default: 'No examples provided.'}}\n\n**Your Task:**\n1.  Analyze the information I've provided above.\n2.  Construct a well-written, clear, and effective prompt that I can use with the target AI to achieve the specified goal. Ensure the prompt implicitly or explicitly incorporates the 'Key Elements of an Effective Prompt'.\n3.  After presenting the generated prompt, briefly explain *why* it is effective, referencing the key elements (Goal, Format, Warnings, Context, Specificity, Examples) and how your generated prompt addresses them based on my input.\n\nPlease provide the generated prompt in a way that I can easily copy and paste it.",
+    "tags": [
+        "meta",
+        "ai",
+        "prompting",
+        "writing",
+        "assistance"
+    ],
+    "variables": {
+        "task_goal": {
+            "description": "Clearly articulate what you want the AI (that will use the generated prompt) to achieve.",
+            "required": true
+        },
+        "desired_output_format": {
+            "description": "Specify the desired output format from the AI (e.g., list, table, JSON, paragraph, code block).",
+            "required": false
+        },
+        "accuracy_warnings": {
+            "description": "Any specific warnings or guidance to give the AI regarding accuracy for the task.",
+            "required": false
+        },
+        "context_for_ai": {
+            "description": "Relevant background information to help the AI understand the task.",
+            "required": false
+        },
+        "specific_details": {
+            "description": "Other specific and detailed instructions or constraints for the AI.",
+            "required": false
+        },
+        "examples_input_output": {
+            "description": "Examples of desired input-output pairs to guide the AI's behavior. E.g., INPUT: ..., OUTPUT: ... (use newlines for multiple examples).",
+            "required": false
+        }
+    },
+    "metadata": {}
+}

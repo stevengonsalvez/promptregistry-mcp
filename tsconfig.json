@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "target": "es2020",
+        "module": "esnext",
+        "moduleResolution": "node",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "outDir": "./dist"
+    },
+    "include": [
+        "src/**/*.ts",
+        "server.ts"
+    ], // Adjust if you put server.ts in src
+    "exclude": [
+        "node_modules"
+    ]
+}
