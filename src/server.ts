@@ -389,11 +389,91 @@ mcpServer.tool(
     }
 );
 
+const loadDefaultPromptsArgsSchema = z.object({});
+mcpServer.tool(
+    'load_default_prompts',
+    'Loads all default prompts from the default_prompts_data directory into the active prompt directory, skipping any that already exist.',
+    loadDefaultPromptsArgsSchema.shape,
+    async (_args: any, context: any): Promise<CallToolResult> => {
+        let copied: string[] = [];
+        let skipped: string[] = [];
+        try {
+            const files = await fs.readdir(PROJECT_INITIAL_DEFAULTS_SRC_DIR);
+            for (const file of files) {
+                if (file.endsWith('.json')) {
+                    const id = path.basename(file, '.json');
+                    if (await readPromptFileFromDir(id, PROMPTS_DIR)) {
+                        skipped.push(id);
+                        continue;
+                    }
+                    const sourcePromptData = await readPromptFileFromDir(id, PROJECT_INITIAL_DEFAULTS_SRC_DIR);
+                    if (sourcePromptData) {
+                        await writePromptFileToDir(sourcePromptData, PROMPTS_DIR);
+                        copied.push(id);
+                    }
+                }
+            }
+            if (copied.length > 0) {
+                console.error(`Auto-loaded ${copied.length} default prompt(s) into ~/.promptregistry: ${copied.join(', ')}`);
+            } else {
+                console.error('No new default prompts loaded into ~/.promptregistry.');
+            }
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                console.error(`Error auto-loading default prompts: ${(error as Error).message}`);
+            }
+        }
+        await context.sendNotification({
+            method: 'notifications/message',
+            params: { level: 'info', data: `Tool 'load_default_prompts' copied ${copied.length} prompt(s), skipped ${skipped.length}.` }
+        } as LoggingMessageNotification);
+        return {
+            content: [{
+                type: 'text',
+                text: `Copied: ${copied.length} prompt(s): ${copied.join(', ') || 'none'}\nSkipped (already present): ${skipped.length} prompt(s): ${skipped.join(', ') || 'none'}`
+            }]
+        };
+    }
+);
+
 // --- Server Initialization and Start ---
 
 async function loadAndRegisterPrompts(): Promise<void> {
     console.error('Attempting to create prompt directory:', PROMPTS_DIR);
     await ensureDirExists(PROMPTS_DIR);
+
+    // If using the default directory (not overridden by env), auto-load defaults
+    if (!process.env.PROMPT_REGISTRY_PROJECT_DIR) {
+        let copied: string[] = [];
+        let skipped: string[] = [];
+        try {
+            const files = await fs.readdir(PROJECT_INITIAL_DEFAULTS_SRC_DIR);
+            for (const file of files) {
+                if (file.endsWith('.json')) {
+                    const id = path.basename(file, '.json');
+                    if (await readPromptFileFromDir(id, PROMPTS_DIR)) {
+                        skipped.push(id);
+                        continue;
+                    }
+                    const sourcePromptData = await readPromptFileFromDir(id, PROJECT_INITIAL_DEFAULTS_SRC_DIR);
+                    if (sourcePromptData) {
+                        await writePromptFileToDir(sourcePromptData, PROMPTS_DIR);
+                        copied.push(id);
+                    }
+                }
+            }
+            if (copied.length > 0) {
+                console.error(`Auto-loaded ${copied.length} default prompt(s) into ~/.promptregistry: ${copied.join(', ')}`);
+            } else {
+                console.error('No new default prompts loaded into ~/.promptregistry.');
+            }
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                console.error(`Error auto-loading default prompts: ${(error as Error).message}`);
+            }
+        }
+    }
+
     const prompts = await getAllPromptFilesDataFromDir(PROMPTS_DIR);
     for (const promptData of prompts) {
         await registerOrUpdateMcpPrompt(promptData);

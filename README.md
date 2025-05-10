@@ -1,6 +1,6 @@
 # Prompt Registry: Your Personal Prompt Registry Server 🏰✍️
 
-**MCP Prompt Squire** is a lightweight, file-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server designed for developers. It runs via `stdio`, making it perfect for local development and integration with CLIs or desktop AI assistants that support MCP. It allows you to manage your prompts in a single directory, keeping your workflow simple and portable.
+**MCP Prompt Registry** is a lightweight, file-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) prompt server designed for developers. It runs via `stdio`, making it perfect for local development and integration with CLIs or desktop AI assistants that support MCP. It allows you to manage your prompts in a single directory, keeping your workflow simple and portable.
 
 ## ✨ Features
 
@@ -32,7 +32,7 @@
 The server uses a single directory for all prompts:
 
 1.  If the environment variable `PROMPT_REGISTRY_PROJECT_DIR` is set, prompts are stored in that directory.
-2.  If not set, prompts are stored in `~/.promptregistry/` in your home directory.
+2.  If not set, prompts are stored in `~/.promptregistry/` in your home directory. On first startup, or if prompts are missing, the server will attempt to copy predefined prompts from a local `default_prompts_data/` directory (if present) into `~/.promptregistry/`.
 
 **Prompt JSON File Structure (`your-prompt-id.json`):**
 
@@ -97,17 +97,15 @@ If `promptregistry-mcp` is published to npm, clients can easily run it.
 1.  **Build the Docker image:**
     Ensure you have Docker installed. From the server's root directory:
     ```bash
-    docker build -t mcp-prompt-squire .
+    docker build -t mcp-promptregistry .
     ```
-    *(You can change `mcp-prompt-squire` to `promptregistry-mcp` or your preferred image name)*
+    *(You can change `mcp-promptregistry` to `promptregistry-mcp` or your preferred image name)*
 
 2.  **Run the Docker container:**
     ```bash
-    docker run -i -t --rm mcp-prompt-squire
+    docker run -i -t --rm mcp-promptregistry
     ```
     *   `-i`: Keep STDIN open (interactive).
-    *   `-t`: Allocate a pseudo-TTY.
-    *   `--rm`: Automatically remove the container when it exits.
 
     The container will have its own internal prompt directory. To persist prompts outside the container or use existing local prompts:
 
@@ -115,13 +113,13 @@ If `promptregistry-mcp` is published to npm, clients can easily run it.
     # Example: Mount local directory into the container
     docker run -i -t --rm \
       -v "$HOME/.promptregistry:/root/.promptregistry" \
-      mcp-prompt-squire 
+      mcp-promptregistry 
     ```
     *(Note: The home directory for the `root` user inside the Alpine container is `/root`)*
 
 ## 🔌 Connecting with MCP Clients
 
-Here's how you might configure clients like Claude Desktop or Amazon Q to use your MCP Prompt Squire. The exact JSON structure might vary slightly based on the client's implementation, but the core idea is to define a stdio server.
+Here's how you might configure clients like Claude Desktop or Amazon Q to use your MCP Prompt Registry. The exact JSON structure might vary slightly based on the client's implementation, but the core idea is to define a stdio server.
 
 **Option A: Using the (Hypothetically) Published NPM Package `promptregistry-mcp`**
 
@@ -131,7 +129,7 @@ If this server were published to npm as `promptregistry-mcp`, the configuration 
 // Example client configuration JSON
 {
   "mcpServers": {
-    "myPromptSquire": { // A name you choose for this server in your client
+    "myPromptRegistry": { // A name you choose for this server in your client
       "command": "npx",
       "args": [
         "promptregistry-mcp" // Assumes 'promptregistry-mcp' is an executable CLI provided by the npm package
@@ -153,17 +151,17 @@ If you've built the server locally and want to point your client to it:
 // Example client configuration JSON
 {
   "mcpServers": {
-    "localPromptSquire": {
+    "localPromptRegistry": {
       "command": "node", // Or your system's Node.js executable path
       "args": [
-        "/full/path/to/your/mcp-prompt-squire/dist/server.js" // Absolute path to the compiled server
+        "/full/path/to/your/mcp-promptregistry/dist/server.js" // Absolute path to the compiled server
       ],
       "env": {}
     }
   }
 }
 ```
-*Replace `/full/path/to/your/mcp-prompt-squire/` with the actual absolute path to where you cloned/built the server.*
+*Replace `/full/path/to/your/mcp-promptregistry/` with the actual absolute path to where you cloned/built the server.*
 
 **Option C: Running via Docker**
 
@@ -173,13 +171,13 @@ If you want your client to launch the server via Docker:
 // Example client configuration JSON
 {
   "mcpServers": {
-    "dockerPromptSquire": {
+    "dockerPromptRegistry": {
       "command": "docker",
       "args": [
         "run",
         "-i", // Essential for stdio interaction
         "--rm",
-        "mcp-prompt-squire" // Or your chosen Docker image name e.g., "promptregistry-mcp"
+        "mcp-promptregistry" // Or your chosen Docker image name e.g., "promptregistry-mcp"
         // You might add volume mounts here if needed, e.g.,
         // "-v", "$HOME/.promptregistry:/root/.promptregistry"
       ],
@@ -218,19 +216,19 @@ The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a GUI 
 
 *   **To connect to a locally running server (compiled):**
     ```bash
-    mcp-inspector --stdio "node /path/to/your/mcp-prompt-squire/dist/server.js"
+    mcp-inspector --stdio "node /path/to/your/mcp-promptregistry/dist/server.js"
     ```
 *   **To connect to the Docker container:**
     ```bash
-    mcp-inspector --stdio "docker run -i --rm mcp-prompt-squire" 
+    mcp-inspector --stdio "docker run -i --rm mcp-promptregistry" 
     ```
-    *(Replace `mcp-prompt-squire` with your image name if different. Ensure `mcp-inspector` is installed and in your PATH.)*
+    *(Replace `mcp-promptregistry` with your image name if different. Ensure `mcp-inspector` is installed and in your PATH.)*
 
     The Inspector allows you to see available prompts and tools, make requests, and view responses interactively.
 
 ## 🧰 Using with Claude Desktop (Example Workflow)
 
-Once MCP Prompt Squire is added as an MCP server in Claude Desktop (using one of the configurations above):
+Once MCP Prompt Registry is added as an MCP server in Claude Desktop (using one of the configurations above):
 
 1.  **Discover Prompts:** Your custom prompts should appear in Claude Desktop's prompt library or be accessible via its command interface (e.g., by typing `/` or similar, depending on Claude's UI). The `description` you set in your prompt's JSON file will be visible.
 2.  **Select a Prompt:** Choose one of your prompts.
@@ -240,7 +238,7 @@ Once MCP Prompt Squire is added as an MCP server in Claude Desktop (using one of
 
 ## 🛠️ Available Management Tools
 
-Your MCP Prompt Squire exposes the following tools (callable via MCP `tools/call` requests):
+Your MCP Prompt Registry exposes the following tools (callable via MCP `tools/call` requests):
 
 *   **`add_prompt`**: Adds a new prompt to the prompt directory.
     *   *Args:* `id`, `content`, `description` (optional), `tags` (optional), `variables` (optional), `metadata` (optional).
@@ -252,10 +250,13 @@ Your MCP Prompt Squire exposes the following tools (callable via MCP `tools/call
     *   *Args:* `id`.
 *   **`filter_prompts_by_tags`**: Lists prompts that match *all* specified tags. Returns a summary (id, description, tags).
     *   *Args:* `tags` (array of strings).
+*   **`load_default_prompts`**: Copies all prompts from the `default_prompts_data/` directory (if present) into the active prompt directory, skipping any that already exist. Useful for populating or restoring default prompts.
+    *   *Args:* None.
 
 ## ⚠️ Troubleshooting & Gotchas
 
 *   **Stdio Server Logging:** Remember, `console.log()` in your `server.ts` will break MCP communication over stdio because it writes to `stdout`. All server-side diagnostic/status logs should use `console.error()`, which writes to `stderr`. For logs you want the client to potentially see, use MCP's logging capability via `context.sendNotification` in tool handlers (if the client supports it).
+*   **Server Startup Messages on Stderr:** Some initial server startup messages, such as directory creation or automatic default prompt loading, will appear on `stderr` (e.g., `Attempting to create prompt directory: /Users/stevengonsalvez/.promptregistry` or `Auto-loaded 2 default prompt(s) into ~/.promptregistry: code-review-assistant, prompt-writing-assistant`). This is because `stdout` is reserved for MCP JSON-RPC messages, and these startup actions occur before a client context is available for `sendNotification`.
 *   **Permissions:** Ensure the server process has write permissions for the prompt directory.
 *   **JSON Validity:** Ensure your prompt JSON files are valid.
 *   **Absolute Paths for Clients:** When configuring clients with local server paths, always use absolute paths.

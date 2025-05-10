@@ -1,0 +1,114 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version increment type (patch, minor, major, or exact version like 1.2.3)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - prerelease
+          - custom
+      custom_version:
+        description: 'Custom version (only used if version_type is "custom")'
+        required: false
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify dist folder
+        run: |
+          if [ ! -d "dist" ] || [ -z "$(ls -A dist)" ]; then
+            echo "Error: dist folder is missing or empty"
+            exit 1
+          fi
+          echo "dist folder contains:"
+          ls -la dist/
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+      - name: Bump version
+        id: version
+        run: |
+          # Update package.json
+          if [ "${{ github.event.inputs.version_type }}" = "custom" ]; then
+            npm version ${{ github.event.inputs.custom_version }} --no-git-tag-version
+            echo "new_version=${{ github.event.inputs.custom_version }}" >> $GITHUB_OUTPUT
+          else
+            NEW_VERSION=$(npm version ${{ github.event.inputs.version_type }} --no-git-tag-version)
+            echo "new_version=${NEW_VERSION:1}" >> $GITHUB_OUTPUT
+          fi
+          
+          # Make sure files field is in package.json
+          if ! grep -q '"files":' package.json; then
+            node -e 'const pkg = require("./package.json"); pkg.files = ["dist", "smithery.yaml"]; require("fs").writeFileSync("package.json", JSON.stringify(pkg, null, 2))'
+            echo "Added files field to package.json"
+          fi
+          
+          git add package.json package-lock.json
+
+      - name: Update changelog
+        run: |
+          echo "# v${{ steps.version.outputs.new_version }} ($(date +%Y-%m-%d))" > CHANGELOG.new.md
+          echo "" >> CHANGELOG.new.md
+          echo "Manual release: ${{ steps.version.outputs.new_version }}" >> CHANGELOG.new.md
+          echo "" >> CHANGELOG.new.md
+          if [ -f CHANGELOG.md ]; then
+            cat CHANGELOG.md >> CHANGELOG.new.md
+            mv CHANGELOG.new.md CHANGELOG.md
+          else
+            mv CHANGELOG.new.md CHANGELOG.md
+          fi
+          git add CHANGELOG.md
+
+      - name: Commit and push changes
+        run: |
+          git commit -m "chore(release): ${{ steps.version.outputs.new_version }} [skip ci]"
+          git tag v${{ steps.version.outputs.new_version }}
+          git push
+          git push --tags
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.new_version }}
+          name: Release v${{ steps.version.outputs.new_version }}
+          body: |
+            ## Manual Release v${{ steps.version.outputs.new_version }}
+            
+            Released on $(date +%Y-%m-%d)
+          draft: false
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          # Must be an Automation token type to bypass 2FA/OTP requirement
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} 
