@@ -13,7 +13,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os'; // Added for home directory
 
-const PROJECT_PROMPTS_DIR = 'prompts_data'; // Local project-specific prompts
+// Default path if no environment variable is set for project-specific prompts
+const DEFAULT_PROMPTS_DIR = process.env.PROMPT_REGISTRY_PROJECT_DIR || path.join(os.homedir(), '.promptregistry');
+
 const PROJECT_INITIAL_DEFAULTS_SRC_DIR = 'default_prompts_data'; // Source for initial defaults
 const USER_REGISTRY_BASE_DIR = path.join(os.homedir(), '.promptregistry');
 const USER_GLOBAL_DEFAULTS_DIR = path.join(USER_REGISTRY_BASE_DIR, 'default_prompts');
@@ -165,15 +167,10 @@ function buildZodArgsShape(variables: Record<string, StoredPromptVariable>): Rec
     return shape;
 }
 
+const PROMPTS_DIR = DEFAULT_PROMPTS_DIR;
+
 async function getActiveStoredPrompt(id: string): Promise<StoredPrompt | null> {
-    // 1. Try project-specific prompts first
-    let promptData = await readPromptFileFromDir(id, PROJECT_PROMPTS_DIR);
-    if (promptData) {
-        return promptData;
-    }
-    // 2. Fallback to user global defaults
-    promptData = await readPromptFileFromDir(id, USER_GLOBAL_DEFAULTS_DIR);
-    return promptData;
+    return await readPromptFileFromDir(id, PROMPTS_DIR);
 }
 
 async function registerOrUpdateMcpPrompt(promptData: StoredPrompt): Promise<void> {
@@ -255,11 +252,11 @@ mcpServer.tool(
     addPromptArgsSchema.shape,
     async (args: any, context: any): Promise<CallToolResult> => {
         const { id, content, description, tags, variables, metadata } = args as z.infer<typeof addPromptArgsSchema>;
-        if (await readPromptFileFromDir(id, PROJECT_PROMPTS_DIR)) {
-            throw new McpError(ErrorCode.InvalidParams, `Prompt with ID '${id}' already exists in the project directory '${PROJECT_PROMPTS_DIR}'.`);
+        if (await readPromptFileFromDir(id, PROMPTS_DIR)) {
+            throw new McpError(ErrorCode.InvalidParams, `Prompt with ID '${id}' already exists in the prompt directory '${PROMPTS_DIR}'.`);
         }
         const newPrompt: StoredPrompt = { id, description, content, tags, variables, metadata };
-        await writePromptFileToDir(newPrompt, PROJECT_PROMPTS_DIR);
+        await writePromptFileToDir(newPrompt, PROMPTS_DIR);
         await registerOrUpdateMcpPrompt(newPrompt);
         await context.sendNotification({
             method: 'notifications/message',
@@ -319,7 +316,7 @@ mcpServer.tool(
             metadata: updates.metadata !== undefined ? updates.metadata : existingPrompt.metadata,
         };
 
-        await writePromptFileToDir(updatedPromptData, PROJECT_PROMPTS_DIR);
+        await writePromptFileToDir(updatedPromptData, PROMPTS_DIR);
         await registerOrUpdateMcpPrompt(updatedPromptData);
         await context.sendNotification({
             method: 'notifications/message',
@@ -338,17 +335,10 @@ mcpServer.tool(
     deletePromptArgsSchema.shape,
     async (args: any, context: any): Promise<CallToolResult> => {
         const { id } = args as z.infer<typeof deletePromptArgsSchema>;
-        const deleted = await deletePromptFileFromDir(id, PROJECT_PROMPTS_DIR);
+        const deleted = await deletePromptFileFromDir(id, PROMPTS_DIR);
 
         if (!deleted) {
-            if (await readPromptFileFromDir(id, USER_GLOBAL_DEFAULTS_DIR)) {
-                await context.sendNotification({
-                    method: 'notifications/message',
-                    params: { level: 'info', data: `Prompt '${id}' was not found in the project directory, but a user global default with this ID exists and remains.` }
-                } as LoggingMessageNotification);
-                return { content: [{ type: 'text', text: `Prompt '${id}' not found in project directory. User global default (if any) is unaffected.` }] };
-            }
-            throw new McpError(ErrorCode.MethodNotFound, `Prompt with ID '${id}' not found in project directory '${PROJECT_PROMPTS_DIR}'.`);
+            throw new McpError(ErrorCode.MethodNotFound, `Prompt with ID '${id}' not found in prompt directory '${PROMPTS_DIR}'.`);
         }
 
         const nowActivePrompt = await getActiveStoredPrompt(id);
@@ -375,19 +365,15 @@ mcpServer.tool(
     async (args): Promise<CallToolResult> => {
         const { tags: filterTags } = args as z.infer<typeof filterPromptsByTagsArgsSchema>;
 
-        // Get all unique prompt IDs from both locations
-        const projectPromptFiles = await fs.readdir(PROJECT_PROMPTS_DIR).catch(() => []);
-        const globalDefaultFiles = await fs.readdir(USER_GLOBAL_DEFAULTS_DIR).catch(() => []);
-
-        const allIds = new Set<string>();
-        projectPromptFiles.forEach(f => f.endsWith('.json') && allIds.add(path.basename(f, '.json')));
-        globalDefaultFiles.forEach(f => f.endsWith('.json') && allIds.add(path.basename(f, '.json')));
-
+        const promptFiles = await fs.readdir(PROMPTS_DIR).catch(() => []);
         const activePrompts: StoredPrompt[] = [];
-        for (const id of allIds) {
-            const promptData = await getActiveStoredPrompt(id);
-            if (promptData) {
-                activePrompts.push(promptData);
+        for (const file of promptFiles) {
+            if (file.endsWith('.json')) {
+                const id = path.basename(file, '.json');
+                const promptData = await getActiveStoredPrompt(id);
+                if (promptData) {
+                    activePrompts.push(promptData);
+                }
             }
         }
 
@@ -405,75 +391,14 @@ mcpServer.tool(
 
 // --- Server Initialization and Start ---
 
-async function ensureUserDefaultPromptsDirAndPopulateFromProjectSource(): Promise<void> {
-    await ensureDirExists(USER_REGISTRY_BASE_DIR);
-    await ensureDirExists(USER_GLOBAL_DEFAULTS_DIR);
-
-    let initialDefaultsCopiedCount = 0;
-    try {
-        const projectDefaultFiles = await fs.readdir(PROJECT_INITIAL_DEFAULTS_SRC_DIR);
-        for (const file of projectDefaultFiles) {
-            if (file.endsWith('.json')) {
-                const id = path.basename(file, '.json');
-                // Check if this ID already exists in the user's global defaults
-                if (!(await readPromptFileFromDir(id, USER_GLOBAL_DEFAULTS_DIR))) {
-                    const sourcePromptData = await readPromptFileFromDir(id, PROJECT_INITIAL_DEFAULTS_SRC_DIR);
-                    if (sourcePromptData) {
-                        await writePromptFileToDir(sourcePromptData, USER_GLOBAL_DEFAULTS_DIR);
-                        initialDefaultsCopiedCount++;
-                    } else {
-                        // This case should be rare if readdir worked but readPromptFileFromDir failed for a listed file
-                        console.error(`Could not read source default prompt '${id}' from '${PROJECT_INITIAL_DEFAULTS_SRC_DIR}' for copying.`);
-                    }
-                }
-            }
-        }
-        if (initialDefaultsCopiedCount > 0) {
-            console.error(`Copied ${initialDefaultsCopiedCount} initial default prompts to '${USER_GLOBAL_DEFAULTS_DIR}'.`);
-        } else {
-            console.error(`No new initial defaults copied. User global defaults in '${USER_GLOBAL_DEFAULTS_DIR}' are up-to-date or '${PROJECT_INITIAL_DEFAULTS_SRC_DIR}' is empty.`);
-        }
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT' && (error as NodeJS.ErrnoException).path === PROJECT_INITIAL_DEFAULTS_SRC_DIR) {
-            console.error(`Project initial defaults source directory '${PROJECT_INITIAL_DEFAULTS_SRC_DIR}' not found. Skipping population of user global defaults.`);
-        } else {
-            console.error(`Error populating user global defaults from '${PROJECT_INITIAL_DEFAULTS_SRC_DIR}': ${(error as Error).message}`);
-        }
-    }
-}
-
-
 async function loadAndRegisterPrompts(): Promise<void> {
-    await ensureDirExists(PROJECT_PROMPTS_DIR);
-    await ensureUserDefaultPromptsDirAndPopulateFromProjectSource();
-
-    const activePromptsMap: Map<string, StoredPrompt> = new Map();
-
-    const globalDefaultPrompts = await getAllPromptFilesDataFromDir(USER_GLOBAL_DEFAULTS_DIR);
-    for (const promptData of globalDefaultPrompts) {
-        activePromptsMap.set(promptData.id, promptData);
-    }
-    const globalCount = activePromptsMap.size;
-    console.error(`Loaded ${globalCount} prompts from user global defaults directory '${USER_GLOBAL_DEFAULTS_DIR}'.`);
-
-
-    const projectPrompts = await getAllPromptFilesDataFromDir(PROJECT_PROMPTS_DIR);
-    let projectOverrideCount = 0;
-    for (const promptData of projectPrompts) {
-        if (activePromptsMap.has(promptData.id)) {
-            projectOverrideCount++;
-        }
-        activePromptsMap.set(promptData.id, promptData);
-    }
-    const projectAddedCount = projectPrompts.length - projectOverrideCount;
-
-    console.error(`Loaded ${projectPrompts.length} prompts from project directory '${PROJECT_PROMPTS_DIR}'. (${projectAddedCount} new, ${projectOverrideCount} overriding global defaults).`);
-
-    for (const promptData of activePromptsMap.values()) {
+    console.error('Attempting to create prompt directory:', PROMPTS_DIR);
+    await ensureDirExists(PROMPTS_DIR);
+    const prompts = await getAllPromptFilesDataFromDir(PROMPTS_DIR);
+    for (const promptData of prompts) {
         await registerOrUpdateMcpPrompt(promptData);
     }
-
-    console.error(`Server initialized. Registered ${activePromptsMap.size} active prompts.`);
+    console.error(`Server initialized. Registered ${prompts.length} prompts.`);
 }
 
 async function startServer(): Promise<void> {
