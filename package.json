@@ -8,6 +8,9 @@
         "dist",
         "default_prompts_data"
     ],
+    "bin": {
+        "mcp-promptregistry": "./dist/server.js"
+    },
     "scripts": {
         "start": "tsx server.ts",
         "dev": "tsx watch server.ts",
