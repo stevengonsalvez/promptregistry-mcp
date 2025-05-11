@@ -163,29 +163,6 @@ If you've built the server locally and want to point your client to it:
 ```
 *Replace `/full/path/to/your/mcp-promptregistry/` with the actual absolute path to where you cloned/built the server.*
 
-**Option C: Running via Docker**
-
-If you want your client to launch the server via Docker:
-
-```json
-// Example client configuration JSON
-{
-  "mcpServers": {
-    "dockerPromptRegistry": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "mcp-promptregistry"
-        // "-v", "$HOME/.promptregistry:/root/.promptregistry"
-      ],
-      "env": {}
-    }
-  }
-}
-```
-
 **Important Considerations for Client Configuration:**
 
 *   **Absolute Paths:** When specifying paths for local commands (Option B), always use absolute paths, as the client application might execute the command from a different working directory.
