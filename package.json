@@ -4,6 +4,10 @@
     "description": "A Model Context Protocol server for managing prompts via stdio.",
     "main": "dist/server.js",
     "type": "module",
+    "files": [
+        "dist",
+        "default_prompts_data"
+    ],
     "scripts": {
         "start": "tsx server.ts",
         "dev": "tsx watch server.ts",
