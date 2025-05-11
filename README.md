@@ -129,13 +129,13 @@ If this server were published to npm as `promptregistry-mcp`, the configuration 
 // Example client configuration JSON
 {
   "mcpServers": {
-    "myPromptRegistry": { // A name you choose for this server in your client
+    "mcp-promptregistry": {
       "command": "npx",
       "args": [
-        "promptregistry-mcp" // Assumes 'promptregistry-mcp' is an executable CLI provided by the npm package
+        "mcp-promptregistry"
       ],
       "env": {
-        // "PROMPT_REGISTRY_PROJECT_DIR": "/path/to/your/prompts" 
+        "PROMPT_REGISTRY_PROJECT_DIR": "/path/to/your/prompts" 
       }
     }
   }
@@ -152,9 +152,9 @@ If you've built the server locally and want to point your client to it:
 {
   "mcpServers": {
     "localPromptRegistry": {
-      "command": "node", // Or your system's Node.js executable path
+      "command": "node", 
       "args": [
-        "/full/path/to/your/mcp-promptregistry/dist/server.js" // Absolute path to the compiled server
+        "/full/path/to/your/mcp-promptregistry/dist/server.js"
       ],
       "env": {}
     }
@@ -175,10 +175,9 @@ If you want your client to launch the server via Docker:
       "command": "docker",
       "args": [
         "run",
-        "-i", // Essential for stdio interaction
+        "-i",
         "--rm",
-        "mcp-promptregistry" // Or your chosen Docker image name e.g., "promptregistry-mcp"
-        // You might add volume mounts here if needed, e.g.,
+        "mcp-promptregistry"
         // "-v", "$HOME/.promptregistry:/root/.promptregistry"
       ],
       "env": {}
