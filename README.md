@@ -229,6 +229,16 @@ Your MCP Prompt Registry exposes the following tools (callable via MCP `tools/ca
 *   **`load_default_prompts`**: Copies all prompts from the `default_prompts_data/` directory (if present) into the active prompt directory, skipping any that already exist. Useful for populating or restoring default prompts.
     *   *Args:* None.
 
+
+## example
+
+
+![output](https://github.com/user-attachments/assets/266d98d6-a883-4c18-b898-ed7367e73d1c)
+
+
+
+
+
 ## ⚠️ Troubleshooting & Gotchas
 
 *   **Stdio Server Logging:** Remember, `console.log()` in your `server.ts` will break MCP communication over stdio because it writes to `stdout`. All server-side diagnostic/status logs should use `console.error()`, which writes to `stderr`. For logs you want the client to potentially see, use MCP's logging capability via `context.sendNotification` in tool handlers (if the client supports it).
@@ -236,6 +246,8 @@ Your MCP Prompt Registry exposes the following tools (callable via MCP `tools/ca
 *   **Permissions:** Ensure the server process has write permissions for the prompt directory.
 *   **JSON Validity:** Ensure your prompt JSON files are valid.
 *   **Absolute Paths for Clients:** When configuring clients with local server paths, always use absolute paths.
+
+
 
 ## 🌱 Contributing & Future Ideas
 
