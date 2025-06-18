@@ -273,8 +273,8 @@ mcpServer.tool(
     'get_prompt_file_content',
     'Retrieves the raw JSON definition of the active prompt (project-specific or user global default).',
     getPromptFileContentArgsSchema.shape,
-    async (args): Promise<CallToolResult> => {
-        const { id } = args as z.infer<typeof getPromptFileContentArgsSchema>;
+    async (args: z.infer<typeof getPromptFileContentArgsSchema>): Promise<CallToolResult> => {
+        const { id } = args;
         const promptData = await getActiveStoredPrompt(id); // Fetches active version
         if (!promptData) {
             throw new McpError(ErrorCode.MethodNotFound, `Prompt file for ID '${id}' not found in project or user global defaults.`);
@@ -362,8 +362,8 @@ mcpServer.tool(
     'filter_prompts_by_tags',
     'Lists active prompts (project-specific or user global defaults) that match all specified tags.',
     filterPromptsByTagsArgsSchema.shape,
-    async (args): Promise<CallToolResult> => {
-        const { tags: filterTags } = args as z.infer<typeof filterPromptsByTagsArgsSchema>;
+    async (args: z.infer<typeof filterPromptsByTagsArgsSchema>): Promise<CallToolResult> => {
+        const { tags: filterTags } = args;
 
         const promptFiles = await fs.readdir(PROMPTS_DIR).catch(() => []);
         const activePrompts: StoredPrompt[] = [];
@@ -378,7 +378,7 @@ mcpServer.tool(
         }
 
         const filteredPrompts = activePrompts.filter(p =>
-            filterTags.every(tag => p.tags.includes(tag))
+            filterTags.every((tag: string) => p.tags.includes(tag))
         );
 
         if (filteredPrompts.length === 0) {
