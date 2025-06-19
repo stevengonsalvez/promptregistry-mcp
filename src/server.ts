@@ -29,7 +29,8 @@ interface StoredPromptVariable {
 interface StoredPrompt {
     id: string;
     description?: string;
-    content: string;
+    content?: string; // Optional - will be loaded from contentFile if not present
+    contentFile?: string; // Path to markdown file containing the prompt content
     tags: string[];
     variables: Record<string, StoredPromptVariable>;
     metadata: Record<string, unknown>;
@@ -61,7 +62,27 @@ async function readPromptFileFromDir(id: string, baseDir: string): Promise<Store
     try {
         const filePath = getPromptPathInDir(id, baseDir);
         const data = await fs.readFile(filePath, 'utf-8');
-        return JSON.parse(data) as StoredPrompt;
+        const promptData = JSON.parse(data) as StoredPrompt;
+
+        // If contentFile is specified, read the markdown content
+        if (promptData.contentFile && !promptData.content) {
+            try {
+                const contentPath = path.join(baseDir, promptData.contentFile);
+                const markdownContent = await fs.readFile(contentPath, 'utf-8');
+                promptData.content = markdownContent;
+            } catch (contentError) {
+                console.error(`Error reading content file '${promptData.contentFile}' for prompt '${id}':`, contentError);
+                // Fall back to empty content if file doesn't exist
+                promptData.content = '';
+            }
+        }
+
+        // Ensure content is always defined
+        if (!promptData.content) {
+            promptData.content = '';
+        }
+
+        return promptData;
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
             return null;
@@ -74,8 +95,29 @@ async function readPromptFileFromDir(id: string, baseDir: string): Promise<Store
 
 async function writePromptFileToDir(promptData: StoredPrompt, baseDir: string): Promise<void> {
     try {
-        const filePath = getPromptPathInDir(promptData.id, baseDir);
-        await fs.writeFile(filePath, JSON.stringify(promptData, null, 2));
+        // Ensure we have content to work with
+        if (!promptData.content && !promptData.contentFile) {
+            throw new McpError(ErrorCode.InvalidParams, `Prompt '${promptData.id}' must have either content or contentFile specified.`);
+        }
+
+        // If content is provided but no contentFile, create the markdown file
+        if (promptData.content && !promptData.contentFile) {
+            const markdownFileName = `${promptData.id}.md`;
+            const markdownPath = path.join(baseDir, markdownFileName);
+
+            // Write the markdown content
+            await fs.writeFile(markdownPath, promptData.content);
+
+            // Update promptData to reference the markdown file
+            promptData.contentFile = markdownFileName;
+            // Remove inline content since it's now in the markdown file
+            delete promptData.content;
+        }
+
+        // Write the JSON metadata file
+        const jsonFilePath = getPromptPathInDir(promptData.id, baseDir);
+        await fs.writeFile(jsonFilePath, JSON.stringify(promptData, null, 2));
+
     } catch (error) {
         console.error(`Error writing prompt file for ID '${promptData.id}' to '${baseDir}':`, error);
         throw new McpError(ErrorCode.InternalError, `Failed to write prompt '${promptData.id}' to directory '${baseDir}'.`);
@@ -84,8 +126,23 @@ async function writePromptFileToDir(promptData: StoredPrompt, baseDir: string): 
 
 async function deletePromptFileFromDir(id: string, baseDir: string): Promise<boolean> {
     try {
+        // First, try to read the prompt to see if it has a contentFile
+        const promptData = await readPromptFileFromDir(id, baseDir);
+
         const filePath = getPromptPathInDir(id, baseDir);
         await fs.unlink(filePath);
+
+        // If there's a markdown content file, delete it too
+        if (promptData && promptData.contentFile) {
+            const markdownPath = path.join(baseDir, promptData.contentFile);
+            try {
+                await fs.unlink(markdownPath);
+            } catch (markdownError) {
+                // Log but don't fail if markdown file doesn't exist
+                console.error(`Warning: Could not delete markdown file '${markdownPath}':`, markdownError);
+            }
+        }
+
         return true;
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -188,7 +245,7 @@ async function registerOrUpdateMcpPrompt(promptData: StoredPrompt): Promise<void
                 throw new McpError(ErrorCode.InvalidParams, `Missing required argument '${varName}' for prompt '${currentPromptData.id}'.`);
             }
         }
-        const processedContent = applyTemplate(currentPromptData.content, argsFromClient);
+        const processedContent = applyTemplate(currentPromptData.content || '', argsFromClient);
         return {
             description: currentPromptData.description,
             messages: [
