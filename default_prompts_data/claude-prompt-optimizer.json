@@ -1,0 +1,41 @@
+{
+    "id": "claude-prompt-optimizer",
+    "description": "Expert prompt engineer that optimizes prompts for Claude using advanced techniques like extended thinking, XML structure, and multishot prompting",
+    "contentFile": "claude-prompt-optimizer.md",
+    "tags": [
+        "prompt-engineering",
+        "optimization",
+        "claude",
+        "meta",
+        "advanced"
+    ],
+    "variables": {
+        "original_prompt": {
+            "description": "The original prompt content to be optimized",
+            "required": true
+        },
+        "optimization_context": {
+            "description": "Optional context about the task type, audience, or domain for better optimization",
+            "required": false
+        }
+    },
+    "metadata": {
+        "author": "Prompt Registry",
+        "version": "1.0.0",
+        "category": "meta-prompts",
+        "techniques": [
+            "extended-thinking",
+            "xml-structure",
+            "multishot-prompting",
+            "prompt-chaining",
+            "role-based-prompting",
+            "chain-of-thought"
+        ],
+        "use_cases": [
+            "prompt optimization",
+            "prompt engineering",
+            "claude enhancement",
+            "structured prompting"
+        ]
+    }
+}
