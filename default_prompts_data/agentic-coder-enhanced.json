@@ -1,0 +1,37 @@
+{
+    "id": "agentic-coder-enhanced",
+    "description": "An expert software engineer and systematic problem solver that collaborates with 'Stevie', using a defined communication protocol, memory system (AmazonQ.md), and task management protocol. This version allows parameterization of the memory file and user task.",
+    "contentFile": "agentic-coder-enhanced.md",
+    "tags": [
+        "agentic-coding",
+        "software-engineering",
+        "problem-solving",
+        "task-management",
+        "documentation",
+        "collaboration",
+        "cli"
+    ],
+    "variables": {
+        "user_goal_or_request": {
+            "description": "The primary goal, task, or coding request from Stevie that the agent should focus on.",
+            "required": true
+        },
+        "project_memory_file_name": {
+            "description": "The name of the project-specific memory/context file (e.g., 'AmazonQ.md', 'ProjectContext.md', '.project-memory'). Defaults to 'AmazonQ.md' if not provided.",
+            "required": false
+        }
+    },
+    "metadata": {
+        "version": "1.1-templated",
+        "persona_type": "agentic-coder-collaborator",
+        "prompt_style": "structured-xml-tags",
+        "requires_tools": [
+            "file_read(path: string)",
+            "file_write(path: string, content: string)",
+            "code_linter(language: string, code: string)",
+            "code_typechecker(language: string, project_root?: string)",
+            "shell_command(command: string)",
+            "web_search(query: string)"
+        ]
+    }
+}

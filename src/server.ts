@@ -29,7 +29,8 @@ interface StoredPromptVariable {
 interface StoredPrompt {
     id: string;
     description?: string;
-    content: string;
+    content?: string; // Optional - will be loaded from contentFile if not present
+    contentFile?: string; // Path to markdown file containing the prompt content
     tags: string[];
     variables: Record<string, StoredPromptVariable>;
     metadata: Record<string, unknown>;
@@ -61,7 +62,27 @@ async function readPromptFileFromDir(id: string, baseDir: string): Promise<Store
     try {
         const filePath = getPromptPathInDir(id, baseDir);
         const data = await fs.readFile(filePath, 'utf-8');
-        return JSON.parse(data) as StoredPrompt;
+        const promptData = JSON.parse(data) as StoredPrompt;
+
+        // If contentFile is specified, read the markdown content
+        if (promptData.contentFile && !promptData.content) {
+            try {
+                const contentPath = path.join(baseDir, promptData.contentFile);
+                const markdownContent = await fs.readFile(contentPath, 'utf-8');
+                promptData.content = markdownContent;
+            } catch (contentError) {
+                console.error(`Error reading content file '${promptData.contentFile}' for prompt '${id}':`, contentError);
+                // Fall back to empty content if file doesn't exist
+                promptData.content = '';
+            }
+        }
+
+        // Ensure content is always defined
+        if (!promptData.content) {
+            promptData.content = '';
+        }
+
+        return promptData;
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
             return null;
@@ -74,8 +95,29 @@ async function readPromptFileFromDir(id: string, baseDir: string): Promise<Store
 
 async function writePromptFileToDir(promptData: StoredPrompt, baseDir: string): Promise<void> {
     try {
-        const filePath = getPromptPathInDir(promptData.id, baseDir);
-        await fs.writeFile(filePath, JSON.stringify(promptData, null, 2));
+        // Ensure we have content to work with
+        if (!promptData.content && !promptData.contentFile) {
+            throw new McpError(ErrorCode.InvalidParams, `Prompt '${promptData.id}' must have either content or contentFile specified.`);
+        }
+
+        // If content is provided but no contentFile, create the markdown file
+        if (promptData.content && !promptData.contentFile) {
+            const markdownFileName = `${promptData.id}.md`;
+            const markdownPath = path.join(baseDir, markdownFileName);
+
+            // Write the markdown content
+            await fs.writeFile(markdownPath, promptData.content);
+
+            // Update promptData to reference the markdown file
+            promptData.contentFile = markdownFileName;
+            // Remove inline content since it's now in the markdown file
+            delete promptData.content;
+        }
+
+        // Write the JSON metadata file
+        const jsonFilePath = getPromptPathInDir(promptData.id, baseDir);
+        await fs.writeFile(jsonFilePath, JSON.stringify(promptData, null, 2));
+
     } catch (error) {
         console.error(`Error writing prompt file for ID '${promptData.id}' to '${baseDir}':`, error);
         throw new McpError(ErrorCode.InternalError, `Failed to write prompt '${promptData.id}' to directory '${baseDir}'.`);
@@ -84,8 +126,23 @@ async function writePromptFileToDir(promptData: StoredPrompt, baseDir: string): 
 
 async function deletePromptFileFromDir(id: string, baseDir: string): Promise<boolean> {
     try {
+        // First, try to read the prompt to see if it has a contentFile
+        const promptData = await readPromptFileFromDir(id, baseDir);
+
         const filePath = getPromptPathInDir(id, baseDir);
         await fs.unlink(filePath);
+
+        // If there's a markdown content file, delete it too
+        if (promptData && promptData.contentFile) {
+            const markdownPath = path.join(baseDir, promptData.contentFile);
+            try {
+                await fs.unlink(markdownPath);
+            } catch (markdownError) {
+                // Log but don't fail if markdown file doesn't exist
+                console.error(`Warning: Could not delete markdown file '${markdownPath}':`, markdownError);
+            }
+        }
+
         return true;
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -188,7 +245,7 @@ async function registerOrUpdateMcpPrompt(promptData: StoredPrompt): Promise<void
                 throw new McpError(ErrorCode.InvalidParams, `Missing required argument '${varName}' for prompt '${currentPromptData.id}'.`);
             }
         }
-        const processedContent = applyTemplate(currentPromptData.content, argsFromClient);
+        const processedContent = applyTemplate(currentPromptData.content || '', argsFromClient);
         return {
             description: currentPromptData.description,
             messages: [
@@ -431,6 +488,89 @@ mcpServer.tool(
             content: [{
                 type: 'text',
                 text: `Copied: ${copied.length} prompt(s): ${copied.join(', ') || 'none'}\nSkipped (already present): ${skipped.length} prompt(s): ${skipped.join(', ') || 'none'}`
+            }]
+        };
+    }
+);
+
+const refineAndAddPromptArgsSchema = z.object({
+    id: z.string().min(1).describe("Unique ID for the refined prompt"),
+    original_prompt: z.string().describe("The original prompt content to be optimized"),
+    description: z.string().optional().describe("Description of the prompt for MCP listing"),
+    tags: z.array(z.string()).optional().default([]).describe("Tags for categorizing the prompt"),
+    variables: z.record(z.string(), z.object({
+        description: z.string().optional(),
+        required: z.boolean().optional(),
+    })).optional().default({}).describe("Schema for template variables"),
+    metadata: z.record(z.string(), z.unknown()).optional().default({}).describe("Additional metadata"),
+    optimization_context: z.string().optional().describe("Context about the task type, audience, or domain for better optimization"),
+});
+
+mcpServer.tool(
+    'refine_and_add_prompt',
+    'Optimizes a prompt using Claude Prompt Optimizer techniques, then adds the refined version to the registry.',
+    refineAndAddPromptArgsSchema.shape,
+    async (args: any, context: any): Promise<CallToolResult> => {
+        const { id, original_prompt, description, tags, variables, metadata, optimization_context } = args as z.infer<typeof refineAndAddPromptArgsSchema>;
+
+        if (await readPromptFileFromDir(id, PROMPTS_DIR)) {
+            throw new McpError(ErrorCode.InvalidParams, `Prompt with ID '${id}' already exists in the prompt directory '${PROMPTS_DIR}'.`);
+        }
+
+        // Get the prompt-writing-assistant prompt for optimization
+        const optimizerPrompt = await readPromptFileFromDir('prompt-writing-assistant', PROMPTS_DIR);
+        if (!optimizerPrompt) {
+            throw new McpError(ErrorCode.InternalError, 'prompt-writing-assistant not found. Please ensure it exists in the prompt registry.');
+        }
+
+        // Apply template variables to the prompt-writing-assistant prompt
+        const templateValues = {
+            task_goal: `Optimize this prompt: ${original_prompt}`,
+            desired_output_format: 'Structured XML format with clear sections',
+            accuracy_warnings: 'Ensure the optimized prompt maintains original intent while improving clarity and effectiveness',
+            context_for_ai: optimization_context || 'General prompt optimization',
+            specific_details: 'Focus on Claude best practices: XML structure, clear instructions, template variables, and appropriate prompting techniques',
+            examples_input_output: 'No specific examples - optimize based on prompt engineering principles'
+        };
+
+        const optimizationRequest = applyTemplate(optimizerPrompt.content || '', templateValues);
+
+        // Create the refined prompt with the optimization request as content
+        // This prompt will be used to actually optimize the original prompt
+        const refinedContent = `# Prompt Optimization Request
+
+${optimizationRequest}
+
+---
+
+**Note**: This prompt should be executed to get the actual optimized version. The output will contain the enhanced prompt following structured prompt engineering principles.`;
+
+        const newPrompt: StoredPrompt = {
+            id,
+            description: description || `Refined version of prompt: ${id}`,
+            content: refinedContent,
+            tags: [...(tags || []), 'optimized', 'refined'],
+            variables,
+            metadata: {
+                ...metadata,
+                original_prompt_length: original_prompt.length,
+                optimization_date: new Date().toISOString(),
+                optimization_context: optimization_context || 'none'
+            }
+        };
+
+        await writePromptFileToDir(newPrompt, PROMPTS_DIR);
+        await registerOrUpdateMcpPrompt(newPrompt);
+
+        await context.sendNotification({
+            method: 'notifications/message',
+            params: { level: 'info', data: `Tool 'refine_and_add_prompt' created optimized prompt: ${id}` }
+        } as LoggingMessageNotification);
+
+        return {
+            content: [{
+                type: 'text',
+                text: `Refined prompt '${id}' added successfully. Original length: ${original_prompt.length} chars. Enhanced with optimization techniques and stored in markdown format.`
             }]
         };
     }

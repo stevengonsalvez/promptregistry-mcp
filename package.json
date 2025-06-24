@@ -15,6 +15,7 @@
         "start": "tsx server.ts",
         "dev": "tsx watch server.ts",
         "build": "tsc && echo '#!/usr/bin/env node' | cat - dist/server.js > dist/server.js.tmp && mv dist/server.js.tmp dist/server.js && chmod +x dist/server.js",
+        "build-prompts": "tsx scripts/build-prompts.ts",
         "start:prod": "node dist/server.js"
     },
     "keywords": [
