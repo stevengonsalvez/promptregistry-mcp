@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/stevengonsalvez-promptregistry-mcp-badge.png)](https://mseep.ai/app/stevengonsalvez-promptregistry-mcp)
+
 # Prompt Registry: Your Personal Prompt Registry Server 🏰✍️
 
 **MCP Prompt Registry** is a lightweight, file-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) prompt server designed for developers. It runs via `stdio`, making it perfect for local development and integration with CLIs or desktop AI assistants that support MCP. It allows you to manage your prompts in a single directory, keeping your workflow simple and portable.
