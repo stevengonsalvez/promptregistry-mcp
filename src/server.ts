@@ -517,48 +517,33 @@ mcpServer.tool(
             throw new McpError(ErrorCode.InvalidParams, `Prompt with ID '${id}' already exists in the prompt directory '${PROMPTS_DIR}'.`);
         }
 
-        // First, get the Claude Prompt Optimizer prompt
-        const optimizerPrompt = await readPromptFileFromDir('claude-prompt-optimizer', PROMPTS_DIR);
+        // Get the prompt-writing-assistant prompt for optimization
+        const optimizerPrompt = await readPromptFileFromDir('prompt-writing-assistant', PROMPTS_DIR);
         if (!optimizerPrompt) {
-            throw new McpError(ErrorCode.InternalError, 'Claude Prompt Optimizer not found. Please ensure it exists in the prompt registry.');
+            throw new McpError(ErrorCode.InternalError, 'prompt-writing-assistant not found. Please ensure it exists in the prompt registry.');
         }
 
-        // Prepare the optimization request
-        const optimizationContext = optimization_context ? `\n\nContext: ${optimization_context}` : '';
-        const optimizationRequest = `${optimizerPrompt.content}
+        // Apply template variables to the prompt-writing-assistant prompt
+        const templateValues = {
+            task_goal: `Optimize this prompt: ${original_prompt}`,
+            desired_output_format: 'Structured XML format with clear sections',
+            accuracy_warnings: 'Ensure the optimized prompt maintains original intent while improving clarity and effectiveness',
+            context_for_ai: optimization_context || 'General prompt optimization',
+            specific_details: 'Focus on Claude best practices: XML structure, clear instructions, template variables, and appropriate prompting techniques',
+            examples_input_output: 'No specific examples - optimize based on prompt engineering principles'
+        };
 
-Original prompt to optimize:
-${original_prompt}${optimizationContext}
-
-Please provide the optimized version following your structured format.`;
+        const optimizationRequest = applyTemplate(optimizerPrompt.content || '', templateValues);
 
         // Create the refined prompt with the optimization request as content
-        // In a real implementation, you would call Claude here to get the optimized version
-        // For now, we'll create a prompt that includes both original and optimization instructions
-        const refinedContent = `# Refined Prompt (Optimized)
+        // This prompt will be used to actually optimize the original prompt
+        const refinedContent = `# Prompt Optimization Request
 
-## Original Prompt
-${original_prompt}
+${optimizationRequest}
 
-## Optimization Instructions
-This prompt has been enhanced using Claude Prompt Optimizer techniques. The optimization process includes:
+---
 
-1. **Clarity and Structure**: Made instructions explicit and sequential
-2. **XML Structure**: Added semantic tags for better organization  
-3. **Template Variables**: Used {{double_brackets}} for dynamic content
-4. **Extended Thinking**: Added reasoning instructions for complex tasks
-5. **Output Control**: Structured response format
-6. **Role-Based Context**: Established expertise and context
-
-## Optimized Prompt
-${original_prompt}
-
-*Note: This is a placeholder. In production, this would contain the actual Claude-optimized version.*
-
-## Usage Notes
-- Replace template variables with actual values
-- Adjust thinking budget for complex reasoning tasks
-- Consider prompt chaining for multi-step processes`;
+**Note**: This prompt should be executed to get the actual optimized version. The output will contain the enhanced prompt following structured prompt engineering principles.`;
 
         const newPrompt: StoredPrompt = {
             id,
