@@ -1,6 +1,6 @@
 {
     "name": "mcp-promptregistry",
-    "version": "1.1.2",
+    "version": "1.3.0",
     "description": "A Model Context Protocol server for managing prompts via stdio.",
     "main": "dist/server.js",
     "type": "module",

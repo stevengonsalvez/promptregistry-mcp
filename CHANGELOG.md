@@ -1,3 +1,7 @@
+# v1.3.0 (2025-07-09)
+
+Manual release: 1.3.0
+
 # v1.1.2 (2025-05-12)
 
 Manual release: 1.1.2
